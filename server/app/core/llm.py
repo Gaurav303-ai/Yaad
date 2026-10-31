@@ -10,7 +10,10 @@ from pydantic import BaseModel, ValidationError
 from app.config import settings
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
-client = genai.Client(api_key=settings.gemini_api_key)
+client = genai.Client(
+    api_key=settings.gemini_api_key,
+    http_options=types.HttpOptions(timeout=60_000),
+)
 
 
 async def request_json(response_model: type[ModelT], prompt: str) -> ModelT:
@@ -20,7 +23,7 @@ async def request_json(response_model: type[ModelT], prompt: str) -> ModelT:
             model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                max_output_tokens=2048,
+                max_output_tokens=8192,
                 system_instruction="Respond with only valid JSON matching the requested schema.",
                 response_mime_type="application/json",
             ),

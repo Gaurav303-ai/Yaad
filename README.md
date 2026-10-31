@@ -1,6 +1,6 @@
 # Yaad
 
-Yaad is a Hinglish-first agentic meeting-to-execution system. M1 stores and lists labelled meeting transcripts through the FastAPI API and Supabase; later milestones add extraction, memory, approval, and execution.
+Yaad is a Hinglish-first agentic meeting-to-execution system. M1 stores and lists labelled meeting transcripts through the FastAPI API and Supabase. M2 adds quote-verified extraction and meeting-relative deadlines; later milestones add cross-meeting memory, approval, and execution.
 
 ## Stack
 
@@ -87,6 +87,16 @@ npm run dev
 ```
 
 The client runs at `http://localhost:5173`; the API runs at `http://localhost:8000` and exposes `GET /health`.
+
+## Evaluate demo extraction
+
+With the server environment active and `GEMINI_API_KEY` set, run the extraction evaluation from `server/`:
+
+```powershell
+python scripts/eval.py
+```
+
+The script processes the four transcripts in `data/` and reports pass/fail for each expected item in `data/expected.json`.
 
 ## Deployment
 
