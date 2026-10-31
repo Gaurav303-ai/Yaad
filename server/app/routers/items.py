@@ -1,0 +1,5 @@
+"""Item API routes."""
+
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/items", tags=["items"])

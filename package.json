@@ -1,0 +1,10 @@
+{
+  "name": "yaad",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n client,server -c blue,green \"npm --prefix client run dev\" \"node server/scripts/run-dev.mjs\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

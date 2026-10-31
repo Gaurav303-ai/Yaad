@@ -1,0 +1,1 @@
+"""Yaad FastAPI application package."""

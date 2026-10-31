@@ -1,0 +1,16 @@
+.env.local
+.env*.local
+.venv/
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+.pytest_cache/
+.coverage
+client/node_modules/
+client/dist/
+server/.venv/
+
+!.env.example
+!client/.env.example
+!server/.env.example
