@@ -6,7 +6,9 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
 import type { ProcessedItem } from '@/lib/types'
 
@@ -14,6 +16,8 @@ export function Review(): JSX.Element {
   const [items, setItems] = useState<ProcessedItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState({ text: '', owner: '', deadline: '' })
 
   const loadItems = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -26,6 +30,64 @@ export function Review(): JSX.Element {
       setLoading(false)
     }
   }, [])
+
+  async function approveItem(item: ProcessedItem): Promise<void> {
+    setError(null)
+    try {
+      await apiRequest<{ status: string }>(`/api/items/${item.id}/approve`, { method: 'POST' })
+      await loadItems()
+    } catch (requestError: unknown) {
+      setError(requestError instanceof Error ? requestError.message : 'The item could not be approved.')
+    }
+  }
+
+  async function rejectItem(item: ProcessedItem): Promise<void> {
+    setError(null)
+    try {
+      await apiRequest<{ status: string }>(`/api/items/${item.id}/reject`, { method: 'POST' })
+      await loadItems()
+    } catch (requestError: unknown) {
+      setError(requestError instanceof Error ? requestError.message : 'The item could not be rejected.')
+    }
+  }
+
+  async function approveAll(): Promise<void> {
+    setError(null)
+    try {
+      await apiRequest<Array<{ status: string }>>('/api/items/approve-all', { method: 'POST' })
+      await loadItems()
+    } catch (requestError: unknown) {
+      setError(requestError instanceof Error ? requestError.message : 'Pending actions could not be approved.')
+    }
+  }
+
+  function startEditing(item: ProcessedItem): void {
+    setEditingId(item.id)
+    setDraft({
+      text: item.text,
+      owner: item.owner_name ?? '',
+      deadline: item.deadline ? format(new Date(item.deadline), "yyyy-MM-dd'T'HH:mm") : '',
+    })
+  }
+
+  async function saveEdit(item: ProcessedItem): Promise<void> {
+    setError(null)
+    try {
+      await apiRequest<ProcessedItem>(`/api/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: draft.text,
+          owner_name: draft.owner.trim() || null,
+          deadline: draft.deadline ? new Date(draft.deadline).toISOString() : null,
+        }),
+      })
+      setEditingId(null)
+      await loadItems()
+    } catch (requestError: unknown) {
+      setError(requestError instanceof Error ? requestError.message : 'The item could not be edited.')
+    }
+  }
 
   useEffect(() => {
     void loadItems()
@@ -43,7 +105,7 @@ export function Review(): JSX.Element {
           <h1 className="page-title">Review & confirm</h1>
           <p className="mt-2 text-sm text-muted-foreground">Check every owner, deadline, and source before an action leaves Yaad.</p>
         </div>
-        <Button disabled title="Approval actions are added in milestone M5">
+        <Button disabled={pendingActions.length === 0 || loading} onClick={() => void approveAll()}>
           <Check className="mr-2 size-4" /> Approve all actions
         </Button>
       </header>
@@ -56,7 +118,7 @@ export function Review(): JSX.Element {
 
       <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/[0.035] p-4 text-sm">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-        <p><span className="font-medium">Nothing is posted from this screen yet.</span> Approve, edit, and reject controls activate with the gated action workflow in M5.</p>
+        <p><span className="font-medium">Actions are posted only after approval.</span> Rejected items are removed from the review queue, and intents never create tracker tasks.</p>
       </div>
 
       {error && (
@@ -123,11 +185,41 @@ export function Review(): JSX.Element {
                       Open source meeting →
                     </Link>
                     <div className="flex gap-2">
-                      <Button disabled size="sm" title="Available in milestone M5" variant="outline"><Pencil className="mr-1.5 size-3.5" /> Edit</Button>
-                      <Button disabled size="sm" title="Available in milestone M5" variant="outline"><X className="mr-1.5 size-3.5" /> Reject</Button>
-                      <Button disabled size="sm" title="Available in milestone M5"><Check className="mr-1.5 size-3.5" /> Approve</Button>
+                      <Button onClick={() => startEditing(item)} size="sm" variant="outline"><Pencil className="mr-1.5 size-3.5" /> Edit</Button>
+                      <Button onClick={() => void rejectItem(item)} size="sm" variant="outline"><X className="mr-1.5 size-3.5" /> Reject</Button>
+                      <Button disabled={item.type === 'intent'} onClick={() => void approveItem(item)} size="sm">
+                        <Check className="mr-1.5 size-3.5" />
+                        {item.status === 'approved' ? 'Retry tracker' : 'Approve'}
+                      </Button>
                     </div>
                   </div>
+                  {editingId === item.id && (
+                    <div className="grid gap-3 rounded-xl border bg-muted/20 p-4">
+                      <Textarea
+                        aria-label="Edited item text"
+                        onChange={(event) => setDraft((current) => ({ ...current, text: event.target.value }))}
+                        value={draft.text}
+                      />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                          aria-label="Owner name"
+                          onChange={(event) => setDraft((current) => ({ ...current, owner: event.target.value }))}
+                          placeholder="Owner name"
+                          value={draft.owner}
+                        />
+                        <Input
+                          aria-label="Deadline"
+                          onChange={(event) => setDraft((current) => ({ ...current, deadline: event.target.value }))}
+                          type="datetime-local"
+                          value={draft.deadline}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button onClick={() => setEditingId(null)} size="sm" variant="ghost">Cancel</Button>
+                        <Button disabled={!draft.text.trim()} onClick={() => void saveEdit(item)} size="sm">Save edits</Button>
+                      </div>
+                    </div>
+                  )}
                   {item.type === 'intent' && (
                     <p className="flex items-center gap-2 text-xs text-muted-foreground"><CircleHelp className="size-3.5" /> Tentative discussion only; it will not become a task.</p>
                   )}

@@ -39,6 +39,9 @@ class FakeQuery:
         self.in_filters[column] = values
         return self
 
+    def or_(self, _: str) -> "FakeQuery":
+        return self
+
     def update(self, values: dict[str, object]) -> "FakeQuery":
         self.updated_values = values
         return self

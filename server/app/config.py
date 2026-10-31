@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     github_repo: str | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    telegram_webhook_secret: str | None = None
     resend_api_key: str | None = None
     digest_from_email: str | None = None
     app_env: str = "development"

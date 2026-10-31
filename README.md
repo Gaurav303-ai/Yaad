@@ -1,6 +1,6 @@
 # Yaad
 
-Yaad is a Hinglish-first agentic meeting-to-execution system. M1 stores and lists labelled meeting transcripts through the FastAPI API and Supabase. M2 adds quote-verified extraction and meeting-relative deadlines. M3 compares new decisions against earlier memory and records conflicts; later milestones add approval and execution.
+Yaad is a Hinglish-first agentic meeting-to-execution system. It stores and lists labelled meeting transcripts, extracts quote-verified decisions/actions/intents with meeting-relative deadlines, compares decisions against earlier memory, and presents conflicts and review items in the React client. Tracker tasks are created only after explicit human approval.
 
 ## Stack
 
@@ -71,13 +71,19 @@ The second migration creates the project tables and seeds Priya, Rahul, Amit, an
 | `SUPABASE_URL` | Supabase project URL | Now |
 | `SUPABASE_SECRET_KEY` | Server-only Supabase secret key | Now |
 | `EMBEDDINGS_PROVIDER`, `VOYAGE_API_KEY` | Optional Voyage semantic search; topic filtering plus Gemini comparison is used without the key | M3 optional |
-| `TRACKER`, `TRELLO_KEY`, `TRELLO_TOKEN`, `TRELLO_LIST_ID` | Trello tracker configuration | Later |
-| `GITHUB_TOKEN`, `GITHUB_REPO` | GitHub tracker configuration | Later |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Telegram integration | Later |
+| `TRACKER` | Select `trello` or `github` | Before approving tasks |
+| `TRELLO_KEY`, `TRELLO_TOKEN`, `TRELLO_LIST_ID` | Trello tracker configuration | If using Trello |
+| `GITHUB_TOKEN`, `GITHUB_REPO` | GitHub tracker configuration | If using GitHub Issues |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Development long polling and approved-action reminders | Before Telegram use |
+| `TELEGRAM_WEBHOOK_SECRET` | Authenticates Telegram webhook requests in production | Before production Telegram use |
 | `RESEND_API_KEY`, `DIGEST_FROM_EMAIL` | Email integration | Later |
 | `APP_ENV`, `CLIENT_URL`, `CRON_SECRET`, `DEMO_MODE` | Application/deployment configuration | As needed |
 
 See [client/.env.example](client/.env.example) and [server/.env.example](server/.env.example) for the complete variable list.
+
+In development, Telegram listens for `/approve <item-id>` and `/reject <item-id>` using long polling. In production, configure Telegram's webhook URL as `https://<server>/api/telegram/webhook` and set the matching `TELEGRAM_WEBHOOK_SECRET`. Telegram reminders are created only for approved actions; `DEMO_MODE=true` gives a newly approved action without a deadline a deadline two minutes ahead.
+
+The review API never creates tracker work from ingestion or listing. Approve actions individually or use **Approve all actions**; rejected items leave the pending queue, and intents cannot be approved as tasks.
 
 ## Run both services
 
