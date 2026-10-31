@@ -1,12 +1,12 @@
 # Yaad
 
-Yaad is a Hinglish-first agentic meeting-to-execution system. This repository is the initial project scaffold; product behavior will be added in later milestones.
+Yaad is a Hinglish-first agentic meeting-to-execution system. M1 stores and lists labelled meeting transcripts through the FastAPI API and Supabase; later milestones add extraction, memory, approval, and execution.
 
 ## Stack
 
 - **Client:** React, Vite, TypeScript, Tailwind CSS, shadcn/ui
 - **Server:** Python 3.11+, FastAPI
-- **Services:** Supabase, Anthropic, and optional tracker, Telegram, email, and embeddings providers
+- **Services:** Supabase, Gemini, and optional tracker, Telegram, email, and embeddings providers
 
 ## Setup
 
@@ -40,7 +40,16 @@ Copy-Item .env.example .env.local
 uvicorn app.main:app --reload --port 8000
 ```
 
-The server requires `ANTHROPIC_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` to be set in `server/.env.local` before startup. The client uses only public `VITE_` variables; never put server secrets in the client environment.
+The server requires `GEMINI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` to be set in `server/.env.local` before startup. The client uses only public `VITE_` variables; never put server secrets in the client environment.
+
+### Apply the Supabase schema
+
+In the Supabase Dashboard, open **SQL Editor** and run these committed migrations in order:
+
+1. `supabase/migrations/0001_init.sql`
+2. `supabase/migrations/0002_core_schema.sql`
+
+The second migration creates the project tables and seeds Priya, Rahul, Amit, and Neha. The API uses the server-only `SUPABASE_SECRET_KEY`; no database secret is exposed to the browser.
 
 ## Environment variables
 
@@ -56,8 +65,8 @@ The server requires `ANTHROPIC_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SECRET_KE
 
 | Variable | Purpose | Needed |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Anthropic server API key | Now |
-| `ANTHROPIC_MODEL` | Model used for structured generation | Now |
+| `GEMINI_API_KEY` | Google Gemini server API key | Now |
+| `GEMINI_MODEL` | Model used for structured generation | Now |
 | `SUPABASE_URL` | Supabase project URL | Now |
 | `SUPABASE_SECRET_KEY` | Server-only Supabase secret key | Now |
 | `EMBEDDINGS_PROVIDER`, `VOYAGE_API_KEY` | Embeddings provider configuration | Later |
@@ -81,6 +90,6 @@ The client runs at `http://localhost:5173`; the API runs at `http://localhost:80
 
 ## Deployment
 
-- Deploy `client/` to Vercel. The included `vercel.json` rewrites client routes to `index.html`; configure the three `VITE_` variables in Vercel.
-- Deploy `server/` to Render or Railway using the included `Procfile`. Configure the server environment variables in the hosting dashboard and set `CLIENT_URL` to the deployed client origin.
+- Deploy `client/` to Vercel. The included `vercel.json` rewrites client routes to `index.html`; configure `VITE_API_URL` to the deployed API URL. The Supabase browser variables are only needed if a future client feature connects directly to Supabase.
+- Deploy `server/` to Render or Railway using the included `Procfile`. Configure the server environment variables in the hosting dashboard and set `CLIENT_URL` to the exact deployed client origin for CORS.
 - Keep server credentials in the server hosting environment only. The client must use the Supabase publishable key, never the secret key.

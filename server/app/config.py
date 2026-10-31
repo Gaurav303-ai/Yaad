@@ -14,8 +14,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5-5"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
     embeddings_provider: str = "voyage"
     voyage_api_key: str | None = None
     supabase_url: str = ""
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def require_core_credentials(self) -> "Settings":
         required = {
-            "ANTHROPIC_API_KEY": self.anthropic_api_key,
+            "GEMINI_API_KEY": self.gemini_api_key,
             "SUPABASE_URL": self.supabase_url,
             "SUPABASE_SECRET_KEY": self.supabase_secret_key,
         }
