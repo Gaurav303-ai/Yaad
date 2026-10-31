@@ -1,0 +1,9 @@
+Meeting 3: Mon 26 Oct 2026 (Hinglish) Priya: Chalo shuru karte hain.
+Rahul, doosre installment ka kya scene hai? Rahul: 30 tareekh ko due
+hai, par cash flow thoda tight hai. Priya: Theek hai, payment agle
+mahine ke end mein karte hain. Rahul, vendor ko bata dena. Rahul: Ji.
+Contract renewal docs abhi pending hain, sorry. Priya: Koi baat nahi,
+kal tak bhej do. Rahul: Ho jayega. Amit: Staging live hai. Production
+deploy parso tak kar dunga. Priya: Ek aur cheez, QA ke liye time
+chahiye, toh launch 30 November se hata ke 7 December kar dete hain.
+Neha: Press note ke baare mein dekhte hain agle hafte.

@@ -9,7 +9,16 @@ export async function apiRequest<ResponseT>(
   path: string,
   init?: RequestInit,
 ): Promise<ResponseT> {
-  const response = await fetch(apiUrl(path), init)
+  let response: Response
+  try {
+    response = await fetch(apiUrl(path), init)
+  } catch (requestError: unknown) {
+    if (!(requestError instanceof TypeError)) throw requestError
+    const apiTarget = apiBaseUrl || 'the Vite /api proxy'
+    throw new Error(
+      `Could not reach the Yaad API at ${apiTarget}. Make sure the FastAPI server is running on port 8000.`,
+    )
+  }
   if (!response.ok) {
     let message = `API request failed (${response.status}).`
     try {

@@ -1,13 +1,12 @@
 """Structured decision-memory retrieval and persistence."""
 
 import re
-from uuid import UUID
 
 from pydantic import TypeAdapter
 from supabase import AsyncClient
 
 from app.core.embeddings import embed_text
-from app.core.schemas import Decision, Item
+from app.core.schemas import Decision
 
 _TOPIC_STOP_WORDS = {
     "a",

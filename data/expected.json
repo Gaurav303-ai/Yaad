@@ -1,0 +1,239 @@
+{
+  "project": "Yaad",
+  "source": "Yaad Master Plan, Section 18 — Expected extraction",
+  "meeting_dates": {
+    "M1": "2026-10-12",
+    "M2": "2026-10-19",
+    "M3": "2026-10-26",
+    "E1": "2026-10-27"
+  },
+  "team": [
+    {
+      "name": "Priya",
+      "role": "Product Lead"
+    },
+    {
+      "name": "Rahul",
+      "role": "Finance/Ops"
+    },
+    {
+      "name": "Amit",
+      "role": "Engineering"
+    },
+    {
+      "name": "Neha",
+      "role": "Marketing"
+    }
+  ],
+  "items": [
+    [
+      "M1",
+      "Vendor installment 1",
+      "decision_action",
+      "Rahul",
+      "2026-10-15",
+      "Completed per M2"
+    ],
+    [
+      "M1",
+      "Vendor installment 2",
+      "decision_action",
+      "Rahul",
+      "2026-10-30",
+      "Later contradicted in M3"
+    ],
+    [
+      "M1",
+      "Launch date",
+      "decision",
+      "Priya",
+      "2026-11-30",
+      "Later updated in M3"
+    ],
+    [
+      "M1",
+      "Staging build",
+      "action",
+      "Amit",
+      "2026-10-16",
+      "is Friday tak"
+    ],
+    [
+      "M1",
+      "Landing page draft",
+      "action",
+      "Neha",
+      "2026-10-14",
+      "parso"
+    ],
+    [
+      "M1",
+      "Ads",
+      "intent_only",
+      "Neha",
+      null,
+      "dekhte hain; not a decision"
+    ],
+    [
+      "M2",
+      "Staging build",
+      "action",
+      "Amit",
+      "2026-10-20",
+      "kal tak; slipped from 16 Oct"
+    ],
+    [
+      "M2",
+      "Contract renewal docs",
+      "action",
+      "Rahul",
+      "2026-10-22",
+      "Missed, reappears in M3"
+    ],
+    [
+      "M2",
+      "Landing page final",
+      "action",
+      "Neha",
+      "2026-10-26",
+      "agle Monday tak"
+    ],
+    [
+      "M2",
+      "Ads",
+      "intent_only",
+      "Neha",
+      null,
+      "ho jayega without a date"
+    ],
+    [
+      "M2",
+      "Weekly demo Fridays 5 pm",
+      "decision",
+      "Priya",
+      "recurring",
+      "Later contradicted in E1"
+    ],
+    [
+      "M3",
+      "Installment 2 moved to end of next month",
+      "decision",
+      "Rahul",
+      "2026-11-30",
+      "Conflict with M1: contradiction"
+    ],
+    [
+      "M3",
+      "Contract renewal docs",
+      "action",
+      "Rahul",
+      "2026-10-27",
+      "Reliability warning: second slip"
+    ],
+    [
+      "M3",
+      "Production deploy",
+      "action",
+      "Amit",
+      "2026-10-28",
+      "parso"
+    ],
+    [
+      "M3",
+      "Launch 30 Nov to 7 Dec",
+      "decision",
+      "Priya",
+      "2026-12-07",
+      "Conflict with M1: explicit update"
+    ],
+    [
+      "M3",
+      "Press note",
+      "intent_only",
+      "Neha",
+      null,
+      "dekhte hain"
+    ],
+    [
+      "E1",
+      "Weekly demo to Thursdays 4 pm",
+      "decision",
+      "Priya",
+      "recurring",
+      "Conflict with M2"
+    ],
+    [
+      "E1",
+      "Fix login bug",
+      "action",
+      "Amit",
+      "2026-10-28",
+      "end of day tomorrow"
+    ],
+    [
+      "E1",
+      "Press note draft",
+      "action",
+      "Neha",
+      "2026-11-04",
+      "next Wednesday"
+    ],
+    [
+      "E1",
+      "No paid ads until after launch",
+      "decision",
+      "Priya",
+      null,
+      "No conflict; ads were only intent before"
+    ],
+    [
+      "E1",
+      "Second vendor as backup",
+      "intent_only",
+      "Rahul",
+      null,
+      "I'll think about it"
+    ]
+  ],
+  "item_fields": [
+    "meeting",
+    "item",
+    "type",
+    "owner",
+    "resolved_deadline",
+    "notes"
+  ],
+  "pass_criteria": {
+    "all_dates_resolve_correctly": true,
+    "intent_items_not_tasks": 5,
+    "exact_conflict_count": 3,
+    "conflicts": [
+      {
+        "new_meeting": "M3",
+        "prior_meeting": "M1",
+        "topic": "Vendor installment 2",
+        "label": "contradiction"
+      },
+      {
+        "new_meeting": "M3",
+        "prior_meeting": "M1",
+        "topic": "Launch date",
+        "label": "update"
+      },
+      {
+        "new_meeting": "E1",
+        "prior_meeting": "M2",
+        "topic": "Weekly demo schedule",
+        "label": "conflict"
+      }
+    ],
+    "no_false_conflict": {
+      "meeting": "E1",
+      "topic": "Paid ads",
+      "reason": "Earlier ads references were intent only"
+    }
+  },
+  "source_notes": [
+    "Source Section 9 short summary mentions a Rahul task in Meeting 3; detailed transcript and expected table specify contract renewal documents."
+  ]
+}
