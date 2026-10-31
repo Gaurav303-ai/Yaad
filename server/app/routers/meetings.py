@@ -1,7 +1,9 @@
 """Meeting creation and listing API routes."""
 
+import asyncio
+import json
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import httpx
@@ -9,10 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from postgrest.exceptions import APIError
 from supabase import AsyncClient
+from starlette.responses import StreamingResponse
 
 from app.agents.conflict import detect_conflicts
+from app.agents.ingest import ingest_transcript
 from app.agents.orchestrator import orchestrate
-from app.core.schemas import Conflict, Decision, Item, TeamMember, TranscriptSegment
+from app.core.schemas import Conflict, Decision, TeamMember, TranscriptSegment
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
@@ -75,14 +79,61 @@ class _InsertedItem(BaseModel):
     id: UUID
 
 
+class MeetingItemResponse(BaseModel):
+    """Persisted extraction item with its resolved owner."""
+
+    id: UUID
+    meeting_id: UUID
+    type: Literal["decision", "action", "intent"]
+    topic: str
+    text: str
+    owner_name: str | None
+    deadline: datetime | None
+    confidence: float | None
+    source_quote: str
+    speaker: str | None
+    status: str
+
+
 class MeetingProcessResponse(BaseModel):
     """Extraction output and new conflicts persisted for a meeting."""
 
     meeting_id: UUID
     meeting_date: date
     segments: list[TranscriptSegment]
-    items: list[Item]
+    items: list[MeetingItemResponse]
     conflicts: list[Conflict]
+
+
+class MeetingDetailResponse(BaseModel):
+    """Meeting record plus its stored transcript segments and items."""
+
+    meeting: MeetingResponse
+    segments: list[TranscriptSegment]
+    items: list[MeetingItemResponse]
+
+
+class _StoredSegment(BaseModel):
+    """Database transcript segment."""
+
+    speaker: str
+    text: str
+    segment_order: int
+
+
+class _StoredItem(BaseModel):
+    """Database extraction item used in meeting details."""
+
+    id: UUID
+    type: Literal["decision", "action", "intent"]
+    topic: str
+    text: str
+    owner_id: UUID | None
+    deadline: datetime | None
+    confidence: float | None
+    source_quote: str
+    speaker: str | None
+    status: str
 
 
 def get_supabase_client(request: Request) -> AsyncClient:
@@ -101,6 +152,8 @@ member_rows = TypeAdapter(list[_MemberRow])
 meeting_rows = TypeAdapter(list[_MeetingRow])
 stored_meeting_rows = TypeAdapter(list[_StoredMeeting])
 inserted_item_rows = TypeAdapter(list[_InsertedItem])
+stored_segments = TypeAdapter(list[_StoredSegment])
+stored_items = TypeAdapter(list[_StoredItem])
 
 
 def _meeting_response(row: _MeetingRow, member_names: dict[UUID, str]) -> MeetingResponse:
@@ -200,6 +253,81 @@ async def create_meeting(
         )
     member_names = {member.id: member.name for member in attendee_members}
     return _meeting_response(inserted_rows[0], member_names)
+
+
+@router.get("/{meeting_id}", response_model=MeetingDetailResponse)
+async def get_meeting(
+    meeting_id: UUID,
+    supabase: SupabaseDependency,
+) -> MeetingDetailResponse:
+    """Return one meeting with its saved segments and extraction items."""
+    try:
+        meeting_response = await (
+            supabase.table("meetings")
+            .select("id,title,meeting_date,attendees,raw_transcript,status,created_at")
+            .eq("id", str(meeting_id))
+            .execute()
+        )
+        meetings = meeting_rows.validate_python(meeting_response.data)
+        if not meetings:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meeting not found.",
+            )
+        meeting = meetings[0]
+        segment_response = await (
+            supabase.table("segments")
+            .select("speaker,text,segment_order")
+            .eq("meeting_id", str(meeting_id))
+            .order("segment_order")
+            .execute()
+        )
+        item_response = await (
+            supabase.table("items")
+            .select("id,type,topic,text,owner_id,deadline,confidence,source_quote,speaker,status")
+            .eq("meeting_id", str(meeting_id))
+            .order("created_at")
+            .execute()
+        )
+        members_response = await supabase.table("members").select("id,name").execute()
+    except APIError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Supabase could not load meeting details: {error.message}",
+        ) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not connect to Supabase while loading meeting details.",
+        ) from error
+
+    members = member_rows.validate_python(members_response.data)
+    member_names = {member.id: member.name for member in members}
+    segments = stored_segments.validate_python(segment_response.data)
+    items = stored_items.validate_python(item_response.data)
+    return MeetingDetailResponse(
+        meeting=_meeting_response(meeting, member_names),
+        segments=[
+            TranscriptSegment(speaker=row.speaker, text=row.text, order=row.segment_order)
+            for row in segments
+        ],
+        items=[
+            MeetingItemResponse(
+                id=item.id,
+                meeting_id=meeting_id,
+                type=item.type,
+                topic=item.topic,
+                text=item.text,
+                owner_name=member_names.get(item.owner_id) if item.owner_id else None,
+                deadline=item.deadline,
+                confidence=item.confidence,
+                source_quote=item.source_quote,
+                speaker=item.speaker,
+                status=item.status,
+            )
+            for item in items
+        ],
+    )
 
 
 @router.post("/{meeting_id}/process", response_model=MeetingProcessResponse)
@@ -307,6 +435,25 @@ async def process_meeting(
             .eq("id", str(meeting.id))
             .execute()
         )
+        response_items: list[MeetingItemResponse] = []
+        for item in persisted_items:
+            if item.id is None:
+                raise RuntimeError("A persisted meeting item is missing its generated ID.")
+            response_items.append(
+                MeetingItemResponse(
+                    id=item.id,
+                    meeting_id=meeting.id,
+                    type=item.type,
+                    topic=item.topic,
+                    text=item.text,
+                    owner_name=item.owner_name,
+                    deadline=item.deadline,
+                    confidence=item.confidence,
+                    source_quote=item.source_quote,
+                    speaker=item.speaker,
+                    status="pending",
+                )
+            )
     except APIError as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -322,6 +469,51 @@ async def process_meeting(
         meeting_id=meeting.id,
         meeting_date=meeting.meeting_date,
         segments=extraction.segments,
-        items=persisted_items,
+        items=response_items,
         conflicts=conflicts,
     )
+
+
+@router.get("/{meeting_id}/replay")
+async def replay_meeting(
+    meeting_id: UUID,
+    supabase: SupabaseDependency,
+) -> StreamingResponse:
+    """Replay labelled transcript turns and then stream persisted extraction cards."""
+    detail = await get_meeting(meeting_id, supabase)
+    segments = detail.segments or ingest_transcript(detail.meeting.raw_transcript).segments
+
+    async def stream_events():
+        yield _sse_event("agent", {"message": "Reading speaker-labelled transcript"})
+        for segment in segments:
+            yield _sse_event("segment", segment.model_dump(mode="json"))
+            await asyncio.sleep(0.12)
+
+        if detail.meeting.status == "ingested":
+            yield _sse_event("agent", {"message": "Extracting items and checking decision memory"})
+            try:
+                processed = await process_meeting(meeting_id, supabase)
+            except HTTPException as error:
+                yield _sse_event("error", {"message": str(error.detail)})
+                return
+            items = processed.items
+            yield _sse_event("conflicts", [conflict.model_dump(mode="json") for conflict in processed.conflicts])
+        else:
+            items = detail.items
+            yield _sse_event("conflicts", [])
+
+        for item in items:
+            yield _sse_event("item", item.model_dump(mode="json"))
+            await asyncio.sleep(0.08)
+        yield _sse_event("complete", {"meeting_id": str(meeting_id), "item_count": len(items)})
+
+    return StreamingResponse(
+        stream_events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _sse_event(event: str, data: object) -> str:
+    """Encode one server-sent event frame."""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"

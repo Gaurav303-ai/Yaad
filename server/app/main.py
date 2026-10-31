@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.supabase_client import create_supabase_admin
 from app.jobs.scheduler import scheduler
-from app.routers import conflicts, items, meetings, people, telegram
+from app.routers import conflicts, items, meetings, memory, people, telegram
 
 
 @asynccontextmanager
@@ -38,7 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in (meetings.router, items.router, conflicts.router, people.router, telegram.router):
+for router in (meetings.router, items.router, conflicts.router, memory.router, people.router, telegram.router):
     app.include_router(router, prefix="/api")
 
 

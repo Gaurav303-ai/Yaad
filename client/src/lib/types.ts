@@ -1,6 +1,3 @@
-// TODO: Define shared client API types.
-export type ApiResponse<T> = T
-
 export interface Meeting {
   id: string
   title: string
@@ -9,4 +6,77 @@ export interface Meeting {
   raw_transcript: string
   status: string
   created_at: string
+}
+
+export type ItemType = 'decision' | 'action' | 'intent'
+
+export interface TranscriptSegment {
+  speaker: string
+  text: string
+  order: number
+}
+
+export interface MeetingItem {
+  id: string
+  type: ItemType
+  topic: string
+  text: string
+  owner_name: string | null
+  deadline: string | null
+  confidence: number | null
+  source_quote: string
+  speaker: string | null
+  status: string
+}
+
+export interface MeetingDetail {
+  meeting: Meeting
+  segments: TranscriptSegment[]
+  items: MeetingItem[]
+}
+
+export interface ProcessedItem extends MeetingItem {
+  meeting_id: string
+}
+
+export interface ConflictSource {
+  topic: string
+  statement: string
+  speaker: string | null
+  source_quote: string
+  meeting_date: string
+}
+
+export interface MeetingConflict {
+  id: string
+  label: 'contradiction' | 'update' | 'duplicate'
+  explanation: string
+  resolution: string | null
+  new: ConflictSource
+  old: ConflictSource
+}
+
+export interface ConflictSummary {
+  label: 'contradiction' | 'update' | 'duplicate'
+  explanation: string
+}
+
+export interface MemoryDecision {
+  id: string
+  meeting_id: string
+  topic: string
+  statement: string
+  meeting_date: string
+  deadline: string | null
+  source_quote: string
+  speaker: string
+  status: string
+}
+
+export interface MeetingProcessResult {
+  meeting_id: string
+  meeting_date: string
+  segments: TranscriptSegment[]
+  items: ProcessedItem[]
+  conflicts: ConflictSummary[]
 }

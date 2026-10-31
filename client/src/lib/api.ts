@@ -1,11 +1,15 @@
 // TODO: Add typed API request helpers.
 const apiBaseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
+export function apiUrl(path: string): string {
+  return `${apiBaseUrl}${path}`
+}
+
 export async function apiRequest<ResponseT>(
   path: string,
   init?: RequestInit,
 ): Promise<ResponseT> {
-  const response = await fetch(`${apiBaseUrl}${path}`, init)
+  const response = await fetch(apiUrl(path), init)
   if (!response.ok) {
     let message = `API request failed (${response.status}).`
     try {

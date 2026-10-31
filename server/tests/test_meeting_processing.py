@@ -30,6 +30,9 @@ class FakeQuery:
     def select(self, _: str) -> "FakeQuery":
         return self
 
+    def order(self, _: str, *, desc: bool = False) -> "FakeQuery":
+        return self
+
     def eq(self, column: str, value: str) -> "FakeQuery":
         self.filters[column] = value
         return self
@@ -56,9 +59,19 @@ class FakeQuery:
             )
         if self.table_name not in {"segments", "items"}:
             raise AssertionError(f"Unexpected table: {self.table_name}")
-        values = self.inserted_values or []
+        if self.inserted_values is None:
+            values = [
+                row
+                for row in self.client.saved_rows[self.table_name]
+                if row.get("meeting_id") == self.filters.get("meeting_id")
+            ]
+            return SimpleNamespace(data=values)
+        values = self.inserted_values
         if self.table_name == "items":
-            values = [{**value, "id": str(uuid4())} for value in values]
+            values = [
+                {**value, "id": str(uuid4()), "status": "pending"}
+                for value in values
+            ]
         self.client.saved_rows[self.table_name].extend(values)
         return SimpleNamespace(data=values)
 
@@ -74,7 +87,9 @@ class FakeSupabase:
         self.meetings: list[dict[str, object]] = [
             {
                 "id": str(MEETING_ID),
+                "title": "Weekly plan",
                 "meeting_date": "2026-10-12",
+                "attendees": [str(PRIYA_ID), str(RAHUL_ID)],
                 "raw_transcript": "Priya: We will launch on 30 November.",
                 "status": "ingested",
                 "created_at": datetime.now(UTC).isoformat(),
@@ -130,6 +145,7 @@ def test_process_meeting_persists_segments_items_and_detected_conflicts(
     try:
         with TestClient(app) as client:
             response = client.post(f"/api/meetings/{MEETING_ID}/process")
+            details = client.get(f"/api/meetings/{MEETING_ID}")
     finally:
         app.dependency_overrides.pop(get_supabase_client, None)
 
@@ -146,3 +162,7 @@ def test_process_meeting_persists_segments_items_and_detected_conflicts(
     assert supabase.saved_rows["items"][0]["topic"] == "Launch date"
     assert supabase.saved_rows["items"][1]["owner_id"] == str(RAHUL_ID)
     assert supabase.meetings[0]["status"] == "review"
+    assert details.status_code == 200
+    assert details.json()["meeting"]["title"] == "Weekly plan"
+    assert len(details.json()["segments"]) == 1
+    assert len(details.json()["items"]) == 2
