@@ -441,3 +441,37 @@ async def edit_item(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Could not connect to Supabase while editing the item.",
         ) from error
+
+
+@router.post("/{item_id}/complete")
+async def complete_item(item_id: UUID, supabase: SupabaseDependency) -> dict[str, str]:
+    """Mark a tracker-backed approved action complete and record its completion time."""
+    try:
+        item = await _load_review_row(supabase, item_id)
+        if item.type != "action" or item.status != "approved" or not item.tracker_ref:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only approved actions with a tracker task can be completed.",
+            )
+        await (
+            supabase.table("items")
+            .update(
+                {
+                    "status": "done",
+                    "completed_at": datetime.now(INDIA_TIMEZONE).isoformat(),
+                }
+            )
+            .eq("id", str(item_id))
+            .execute()
+        )
+        return {"status": "done"}
+    except APIError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Supabase could not complete the item: {error.message}",
+        ) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not connect to Supabase while completing the item.",
+        ) from error

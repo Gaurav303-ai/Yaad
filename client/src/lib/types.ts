@@ -80,3 +80,37 @@ export interface MeetingProcessResult {
   items: ProcessedItem[]
   conflicts: ConflictSummary[]
 }
+
+export interface PersonSummary {
+  member_id: string
+  name: string
+  role: string
+  open_actions: number
+  completed: number
+  on_time_rate: number | null
+  avg_slip_days: number | null
+  reliability_score: number | null
+}
+
+export interface PersonDetail {
+  summary: PersonSummary
+  open_items: Array<{
+    id: string
+    topic: string
+    text: string
+    deadline: string | null
+    status: string
+    tracker_ref: string | null
+  }>
+}
+
+export interface DigestPreview {
+  id: string
+  member_id: string
+  member_name: string
+  week_start: string
+  subject: string
+  body: string
+  status: string
+  sent_at: string | null
+}

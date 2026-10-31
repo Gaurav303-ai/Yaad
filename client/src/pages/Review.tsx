@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Check, CircleHelp, Pencil, ShieldCheck, X } from 'lucide-react'
+import { Check, CircleHelp, Pencil, ShieldCheck, TriangleAlert, X } from 'lucide-react'
 import { useCallback, useEffect, useState, type JSX } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
@@ -10,10 +10,11 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
-import type { ProcessedItem } from '@/lib/types'
+import type { PersonSummary, ProcessedItem } from '@/lib/types'
 
 export function Review(): JSX.Element {
   const [items, setItems] = useState<ProcessedItem[]>([])
+  const [people, setPeople] = useState<PersonSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -23,7 +24,12 @@ export function Review(): JSX.Element {
     setLoading(true)
     setError(null)
     try {
-      setItems(await apiRequest<ProcessedItem[]>('/api/items?status=pending'))
+      const [nextItems, nextPeople] = await Promise.all([
+        apiRequest<ProcessedItem[]>('/api/items?status=pending'),
+        apiRequest<PersonSummary[]>('/api/people'),
+      ])
+      setItems(nextItems)
+      setPeople(nextPeople)
     } catch (requestError: unknown) {
       setError(requestError instanceof Error ? requestError.message : 'Review items could not be loaded.')
     } finally {
@@ -162,6 +168,16 @@ export function Review(): JSX.Element {
                       <p className="text-xs text-muted-foreground">Owner</p>
                       <p className="mt-1 text-sm font-medium">{item.owner_name ?? 'Unassigned'}</p>
                     </div>
+                    {item.deadline && item.owner_name && people.some((person) =>
+                      person.name === item.owner_name &&
+                      ((person.on_time_rate !== null && person.on_time_rate < 60) ||
+                        (person.avg_slip_days !== null && person.avg_slip_days > 3))
+                    ) && (
+                      <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.05] p-3 text-sm text-amber-800 dark:text-amber-200">
+                        <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                        {item.owner_name} has a history of slipping deadlines. Consider confirming this date before approval.
+                      </p>
+                    )}
                     <div className="rounded-xl bg-muted/50 p-3">
                       <p className="text-xs text-muted-foreground">Deadline</p>
                       <p className="mt-1 text-sm font-medium">

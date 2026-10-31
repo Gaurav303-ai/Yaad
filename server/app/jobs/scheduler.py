@@ -5,7 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import settings
 from app.core.dates import INDIA_TIMEZONE
-from app.jobs.digest import send_weekly_digest
+from app.jobs.digest import prepare_weekly_digest_drafts
 from app.jobs.reminders import send_due_reminders
 
 scheduler = AsyncIOScheduler(timezone=INDIA_TIMEZONE)
@@ -16,7 +16,7 @@ scheduler.add_job(
     id="reminders",
 )
 scheduler.add_job(
-    send_weekly_digest,
+    prepare_weekly_digest_drafts,
     CronTrigger(day_of_week="mon", hour=9, minute=0, timezone=INDIA_TIMEZONE),
     id="weekly-digest",
 )

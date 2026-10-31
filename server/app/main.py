@@ -9,10 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.supabase_client import create_supabase_admin
 from app.core.telegram import start_telegram
+from app.jobs.digest import prepare_weekly_digest_drafts
 from app.jobs.reminders import send_due_reminders
 from app.jobs.scheduler import scheduler
-from app.routers import conflicts, items, meetings, memory, people, telegram
+from app.routers import conflicts, digests, items, meetings, memory, people, telegram
 from app.routers.telegram import process_telegram_update
+from apscheduler.triggers.cron import CronTrigger
+from app.core.dates import INDIA_TIMEZONE
 
 
 @asynccontextmanager
@@ -25,6 +28,13 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
         "interval",
         minutes=5,
         id="reminders",
+        args=(supabase_admin,),
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        prepare_weekly_digest_drafts,
+        CronTrigger(day_of_week="mon", hour=9, minute=0, timezone=INDIA_TIMEZONE),
+        id="weekly-digest",
         args=(supabase_admin,),
         replace_existing=True,
     )
@@ -59,7 +69,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in (meetings.router, items.router, conflicts.router, memory.router, people.router, telegram.router):
+for router in (
+    meetings.router,
+    items.router,
+    conflicts.router,
+    memory.router,
+    people.router,
+    telegram.router,
+    digests.router,
+):
     app.include_router(router, prefix="/api")
 
 

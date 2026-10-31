@@ -49,8 +49,9 @@ In the Supabase Dashboard, open **SQL Editor** and run these committed migration
 1. `supabase/migrations/0001_init.sql`
 2. `supabase/migrations/0002_core_schema.sql`
 3. `supabase/migrations/0003_conflict_memory.sql`
+4. `supabase/migrations/0004_digests_reliability.sql`
 
-The second migration creates the project tables and seeds Priya, Rahul, Amit, and Neha. Run the third migration before using `POST /api/meetings/{meeting_id}/process`; it adds decision metadata and the pgvector search function. The API uses the server-only `SUPABASE_SECRET_KEY`; no database secret is exposed to the browser.
+The second migration creates the project tables and seeds Priya, Rahul, Amit, and Neha. Run the third migration before using `POST /api/meetings/{meeting_id}/process`; it adds decision metadata and the pgvector search function. Run the fourth before enabling completion tracking or digest previews; it adds reliability accounting and the reviewable digest table. The API uses the server-only `SUPABASE_SECRET_KEY`; no database secret is exposed to the browser.
 
 ## Environment variables
 
@@ -76,14 +77,14 @@ The second migration creates the project tables and seeds Priya, Rahul, Amit, an
 | `GITHUB_TOKEN`, `GITHUB_REPO` | GitHub tracker configuration | If using GitHub Issues |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Development long polling and approved-action reminders | Before Telegram use |
 | `TELEGRAM_WEBHOOK_SECRET` | Authenticates Telegram webhook requests in production | Before production Telegram use |
-| `RESEND_API_KEY`, `DIGEST_FROM_EMAIL` | Email integration | Later |
+| `RESEND_API_KEY`, `DIGEST_FROM_EMAIL` | Resend sender configuration; each member also needs an email in Supabase | Before digest email |
 | `APP_ENV`, `CLIENT_URL`, `CRON_SECRET`, `DEMO_MODE` | Application/deployment configuration | As needed |
 
 See [client/.env.example](client/.env.example) and [server/.env.example](server/.env.example) for the complete variable list.
 
 In development, Telegram listens for `/approve <item-id>` and `/reject <item-id>` using long polling. In production, configure Telegram's webhook URL as `https://<server>/api/telegram/webhook` and set the matching `TELEGRAM_WEBHOOK_SECRET`. Telegram reminders are created only for approved actions; `DEMO_MODE=true` gives a newly approved action without a deadline a deadline two minutes ahead.
 
-The review API never creates tracker work from ingestion or listing. Approve actions individually or use **Approve all actions**; rejected items leave the pending queue, and intents cannot be approved as tasks.
+The review API never creates tracker work from ingestion or listing. Approve actions individually or use **Approve all actions**; rejected items leave the pending queue, and intents cannot be approved as tasks. Weekly digests are draft previews only until a reviewer approves them. Configure an email on each Supabase `members` row before sending personalized digests.
 
 ## Run both services
 
