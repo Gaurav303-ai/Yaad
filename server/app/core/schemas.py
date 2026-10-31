@@ -30,6 +30,7 @@ class Item(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    id: UUID | None = None
     type: ItemType
     topic: str = Field(min_length=1, max_length=160)
     text: str = Field(min_length=1, max_length=1000)
@@ -78,12 +79,15 @@ class TeamMember(BaseModel):
 class Decision(BaseModel):
     """A normalized decision ready for the decision ledger."""
 
+    id: UUID | None = None
     topic: str
     statement: str
     meeting_id: UUID | None = None
     meeting_date: date
+    deadline: datetime | None = None
     source_quote: str
     speaker: str
+    embedding: list[float] | None = None
 
 
 class Conflict(BaseModel):

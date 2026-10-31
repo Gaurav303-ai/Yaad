@@ -1,6 +1,6 @@
 # Yaad
 
-Yaad is a Hinglish-first agentic meeting-to-execution system. M1 stores and lists labelled meeting transcripts through the FastAPI API and Supabase. M2 adds quote-verified extraction and meeting-relative deadlines; later milestones add cross-meeting memory, approval, and execution.
+Yaad is a Hinglish-first agentic meeting-to-execution system. M1 stores and lists labelled meeting transcripts through the FastAPI API and Supabase. M2 adds quote-verified extraction and meeting-relative deadlines. M3 compares new decisions against earlier memory and records conflicts; later milestones add approval and execution.
 
 ## Stack
 
@@ -48,8 +48,9 @@ In the Supabase Dashboard, open **SQL Editor** and run these committed migration
 
 1. `supabase/migrations/0001_init.sql`
 2. `supabase/migrations/0002_core_schema.sql`
+3. `supabase/migrations/0003_conflict_memory.sql`
 
-The second migration creates the project tables and seeds Priya, Rahul, Amit, and Neha. The API uses the server-only `SUPABASE_SECRET_KEY`; no database secret is exposed to the browser.
+The second migration creates the project tables and seeds Priya, Rahul, Amit, and Neha. Run the third migration before using `POST /api/meetings/{meeting_id}/process`; it adds decision metadata and the pgvector search function. The API uses the server-only `SUPABASE_SECRET_KEY`; no database secret is exposed to the browser.
 
 ## Environment variables
 
@@ -69,7 +70,7 @@ The second migration creates the project tables and seeds Priya, Rahul, Amit, an
 | `GEMINI_MODEL` | Model used for structured generation | Now |
 | `SUPABASE_URL` | Supabase project URL | Now |
 | `SUPABASE_SECRET_KEY` | Server-only Supabase secret key | Now |
-| `EMBEDDINGS_PROVIDER`, `VOYAGE_API_KEY` | Embeddings provider configuration | Later |
+| `EMBEDDINGS_PROVIDER`, `VOYAGE_API_KEY` | Optional Voyage semantic search; topic filtering plus Gemini comparison is used without the key | M3 optional |
 | `TRACKER`, `TRELLO_KEY`, `TRELLO_TOKEN`, `TRELLO_LIST_ID` | Trello tracker configuration | Later |
 | `GITHUB_TOKEN`, `GITHUB_REPO` | GitHub tracker configuration | Later |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Telegram integration | Later |
@@ -97,6 +98,7 @@ python scripts/eval.py
 ```
 
 The script processes the four transcripts in `data/` and reports pass/fail for each expected item in `data/expected.json`.
+Run `python scripts/eval.py --conflicts` to also verify the three expected cross-meeting conflicts and the paid-ads false-positive guard.
 
 ## Deployment
 

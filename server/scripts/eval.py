@@ -1,5 +1,6 @@
 """Run the extraction pipeline against the four supplied ground-truth meetings."""
 
+import argparse
 import asyncio
 import json
 import re
@@ -7,6 +8,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 import sys
+from uuid import uuid4
 
 from pydantic import BaseModel
 
@@ -14,8 +16,10 @@ ROOT = Path(__file__).resolve().parents[2]
 SERVER_DIRECTORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVER_DIRECTORY))
 
+from app.agents.conflict import compare_decisions
+from app.agents.memory import topics_related
 from app.agents.orchestrator import orchestrate
-from app.core.schemas import Item, MeetingExtraction, TeamMember
+from app.core.schemas import Decision, Item, MeetingExtraction, TeamMember
 
 
 ExpectedItem = tuple[str, str, str, str | None, str | None, str]
@@ -28,12 +32,30 @@ class ExpectedMember(BaseModel):
     role: str
 
 
+class ExpectedConflict(BaseModel):
+    """Expected cross-meeting decision relationship."""
+
+    new_meeting: str
+    prior_meeting: str
+    topic: str
+    label: str
+
+
+class EvaluationCriteria(BaseModel):
+    """M2 and M3 acceptance criteria from the supplied ground truth."""
+
+    exact_conflict_count: int
+    conflicts: list[ExpectedConflict]
+    no_false_conflict: dict[str, str]
+
+
 class ExpectedData(BaseModel):
     """Typed evaluation fixture."""
 
     meeting_dates: dict[str, date]
     team: list[ExpectedMember]
     items: list[ExpectedItem]
+    pass_criteria: EvaluationCriteria
 
 
 MEETING_FILES = {
@@ -77,6 +99,75 @@ def _topic_matches(expected_topic: str, item: Item) -> bool:
     return False
 
 
+async def evaluate_conflicts(
+    expected_data: ExpectedData,
+    meetings: dict[str, tuple[date, list[Item]]],
+) -> bool:
+    """Evaluate cross-meeting decisions against the expected conflict set."""
+    history: list[tuple[str, date, Decision]] = []
+    found: list[tuple[str, str, str, str]] = []
+    meeting_ids = {meeting_id: uuid4() for meeting_id in meetings}
+
+    for meeting_id, (meeting_date, items) in sorted(meetings.items(), key=lambda row: row[1][0]):
+        for item in items:
+            if item.type != "decision":
+                continue
+            decision = Decision(
+                topic=item.topic,
+                statement=item.text,
+                meeting_id=meeting_ids[meeting_id],
+                meeting_date=meeting_date,
+                deadline=item.deadline,
+                source_quote=item.source_quote,
+                speaker=item.speaker,
+            )
+            for old_meeting, old_date, old_decision in history:
+                if old_date >= meeting_date or not topics_related(decision.topic, old_decision.topic):
+                    continue
+                assessment = await compare_decisions(decision, old_decision)
+                if assessment.label != "none":
+                    found.append((meeting_id, old_meeting, item.topic, assessment.label))
+            history.append((meeting_id, meeting_date, decision))
+
+    expected_conflicts = expected_data.pass_criteria.conflicts
+    expected_matches = 0
+    for expected in expected_conflicts:
+        match = next(
+            (
+                conflict
+                for conflict in found
+                if conflict[0] == expected.new_meeting
+                and conflict[1] == expected.prior_meeting
+                and topics_related(conflict[2], expected.topic)
+            ),
+            None,
+        )
+        matched = match is not None and (
+            expected.label == "conflict" or match[3] == expected.label
+        )
+        expected_matches += int(matched)
+        print(
+            f"{expected.new_meeting} vs {expected.prior_meeting} | {expected.topic} | "
+            f"{'PASS' if matched else 'FAIL'}",
+            flush=True,
+        )
+
+    no_false_topic = expected_data.pass_criteria.no_false_conflict["topic"]
+    false_conflicts = [conflict for conflict in found if topics_related(conflict[2], no_false_topic)]
+    exact_count = len(found) == expected_data.pass_criteria.exact_conflict_count
+    no_false_conflict = not false_conflicts
+    print(
+        f"Conflict evaluation: {len(found)}/{expected_data.pass_criteria.exact_conflict_count} conflicts; "
+        f"no-false-conflict check {'PASS' if no_false_conflict else 'FAIL'}.",
+        flush=True,
+    )
+    return (
+        expected_matches == len(expected_conflicts)
+        and exact_count
+        and no_false_conflict
+    )
+
+
 def _expected_types(expected_type: str) -> set[str]:
     if expected_type == "decision_action":
         return {"decision", "action"}
@@ -111,8 +202,8 @@ def _candidate_matches(candidates: Sequence[Item], expected: ExpectedItem) -> bo
     return expected_kinds.issubset({item.type for item in matching})
 
 
-async def evaluate() -> int:
-    """Run all supplied transcripts and print one result for every expected item."""
+async def evaluate(*, check_conflicts: bool = False) -> int:
+    """Run extraction checks and optionally evaluate cross-meeting conflicts."""
     expected_path = ROOT / "data" / "expected.json"
     expected_data = ExpectedData.model_validate(json.loads(expected_path.read_text(encoding="utf-8")))
     team = [TeamMember(name=member.name) for member in expected_data.team]
@@ -134,15 +225,15 @@ async def evaluate() -> int:
         *(run_meeting(transcript, meeting_date) for _, transcript, meeting_date in meeting_inputs),
         return_exceptions=True,
     )
-    transcripts: dict[str, tuple[str, list[Item]]] = {}
-    for (meeting_id, transcript, _), result in zip(meeting_inputs, results, strict=True):
+    transcripts: dict[str, tuple[str, date, list[Item]]] = {}
+    for (meeting_id, transcript, meeting_date), result in zip(meeting_inputs, results, strict=True):
         if isinstance(result, BaseException):
             provider_code = getattr(result, "code", None)
             code_text = f", provider code {provider_code}" if provider_code is not None else ""
             print(f"{meeting_id}: FAIL extraction ({type(result).__name__}{code_text})", flush=True)
-            transcripts[meeting_id] = (transcript, [])
+            transcripts[meeting_id] = (transcript, meeting_date, [])
             continue
-        transcripts[meeting_id] = (transcript, result.items)
+        transcripts[meeting_id] = (transcript, meeting_date, result.items)
         print(
             f"{meeting_id}: extracted {len(result.items)} quote-verified items from {len(result.segments)} segments",
             flush=True,
@@ -152,7 +243,7 @@ async def evaluate() -> int:
     total = len(expected_data.items)
     for expected in expected_data.items:
         meeting_id, topic, _, _, _, _ = expected
-        transcript, items = transcripts[meeting_id]
+        transcript, _, items = transcripts[meeting_id]
         source_text = " ".join(transcript.casefold().split())
         traceable_items = [
             item
@@ -166,12 +257,27 @@ async def evaluate() -> int:
         print(f"{meeting_id} | {topic} | {'PASS' if item_passed else 'FAIL'}", flush=True)
 
     print(f"Extraction evaluation: {passed}/{total} expected items passed.", flush=True)
-    return 0 if passed == total else 1
+    if passed != total:
+        return 1
+    if check_conflicts:
+        meetings = {
+            meeting_id: (meeting_date, items)
+            for meeting_id, (_, meeting_date, items) in transcripts.items()
+        }
+        return 0 if await evaluate_conflicts(expected_data, meetings) else 1
+    return 0
 
 
 def main() -> None:
     """Run the asynchronous evaluation CLI."""
-    raise SystemExit(asyncio.run(evaluate()))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--conflicts",
+        action="store_true",
+        help="also check cross-meeting conflict count, labels, and false positives",
+    )
+    args = parser.parse_args()
+    raise SystemExit(asyncio.run(evaluate(check_conflicts=args.conflicts)))
 
 
 if __name__ == "__main__":
